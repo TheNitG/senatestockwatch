@@ -14,5 +14,3 @@ soupsieve==2.2
 typing-extensions==3.7.4.3
 urllib3==1.26.3
 yarl==1.6.3
-
-cfscrape~=2.1.1
