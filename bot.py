@@ -1,5 +1,7 @@
 # Import necessary packages
 import os
+
+import cfscrape
 import discord as discord
 from dotenv import load_dotenv
 import requests
@@ -19,13 +21,14 @@ def map_senators(dates, names, companies, tickers, prices):
 
 
 def obtain_data():
+    scraper = cfscrape.create_scraper()  # returns a CloudflareScraper instance
     # Declare the URL
     URL = "https://sec.report/Senate-Stock-Disclosures"
     # Declare Browser
     user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.27 Safari/537.36"
     headers = {'User-Agent': user_agent}
     # Get the page
-    page = requests.get(URL, headers=headers)
+    page = scraper.get(URL, headers=headers)
     # Use BeautifulSoup package to parse as html
     soup = BeautifulSoup(page.content, 'html.parser')
 
