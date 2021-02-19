@@ -1,12 +1,11 @@
 # Import necessary packages
 import os
 
-import cfscrape
 import discord as discord
 from dotenv import load_dotenv
-import requests
-from bs4 import BeautifulSoup
 import re
+import undetected_chromedriver as uc
+from selenium import webdriver
 
 
 def map_senators(dates, names, companies, tickers, prices):
@@ -21,18 +20,19 @@ def map_senators(dates, names, companies, tickers, prices):
 
 
 def obtain_data():
-    scraper = cfscrape.create_scraper()  # returns a CloudflareScraper instance
     # Declare the URL
-    URL = "https://sec.report/Senate-Stock-Disclosures"
-    # Declare Browser
-    user_agent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.27 Safari/537.36"
-    headers = {'User-Agent': user_agent}
-    # Get the page
-    page = scraper.get(URL, headers=headers)
-    # Use BeautifulSoup package to parse as html
-    soup = BeautifulSoup(page.content, 'html.parser')
+    url = "https://sec.report/Senate-Stock-Disclosures"
 
-    contents = soup.prettify()
+    # Define the browser type and configure options to work
+    options = webdriver.ChromeOptions()
+    # Make it so browser runs in background
+    options.add_argument('headless')
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    driver = uc.Chrome(options=options)
+    driver.get(url)
+
+    contents = driver.page_source
 
     dates = re.findall(r'\d{4}-\d\d-\d\d', contents)
     names_reversed = re.findall(r'\[\w+, \w+]', contents)
@@ -84,4 +84,3 @@ async def on_message(message):
 
 
 client.run(TOKEN)
-
