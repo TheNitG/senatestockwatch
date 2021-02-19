@@ -4,47 +4,46 @@ import os
 import discord as discord
 from dotenv import load_dotenv
 import re
-import undetected_chromedriver as uc
-from selenium import webdriver
+import urllib.request
+from datetime import date
+import json
 
 
-def map_senators(dates, names, companies, tickers, prices):
-    senators = {}
-    for x in range(len(names)):
-        name = names[x]
-        if name in senators:
-            senators[name].append([dates[x], companies[x], tickers[x], prices[x]])
-        else:
-            senators[name] = [[dates[x], companies[x], tickers[x], prices[x]]]
-    return senators
+today = date.today()
 
 
-def obtain_data():
+async def build_embed(message, senator):
+    # Note: date_recieved is spelled as it is in the .json file
+    embed = discord.Embed(title=f'Senator information for {senator["date_recieved"]}',
+                          color=discord.Color.blue())
+
+    embed.set_author(name='SenateStockWatch Bot')
+
+    embed.add_field(name='Senator Name', value=f'{senator["first_name"]} {senator["last_name"]}', inline=False)
+    embed.add_field(name='History of Transactions', value='#'*20, inline=False)
+
+    transactions = senator['transactions']
+    for num, transaction in enumerate(transactions):
+        print(transaction)
+        ticker = transaction['ticker']
+        ticker = 'N/A' if ticker == '--' else ticker[ticker.index('>') + 1:ticker.index('</')]
+        embed.add_field(name=f'Transaction {num + 1}: ({transaction["type"]})', value=f'Ticker: {ticker} | '
+        f'{re.sub(r" <.*", "", transaction["asset_description"])}\nAmount: {transaction["amount"]}', inline=False)
+    embed.set_footer(text='Thanks for using SenateStockWatch Bot!')
+
+    await message.channel.send(embed=embed)
+
+
+async def obtain_data(message, date_use=f'{today.month:02d}_{today.day:02d}_{today.year}'):
     # Declare the URL
-    url = "https://sec.report/Senate-Stock-Disclosures"
+    url = f'https://senatestockwatcher.com/data/transaction_report_for_{date_use}' \
+          f'.json'
+    # Get the page
+    data = urllib.request.urlopen(url).read().decode()
+    senators_json = json.loads(data)
 
-    # Define the browser type and configure options to work
-    options = webdriver.ChromeOptions()
-    # Make it so browser runs in background
-    options.add_argument('headless')
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-    driver = uc.Chrome(options=options)
-    driver.get(url)
-
-    contents = driver.page_source
-
-    dates = re.findall(r'\d{4}-\d\d-\d\d', contents)
-    names_reversed = re.findall(r'\[\w+, \w+]', contents)
-    names = []
-    for name in names_reversed:
-        name_contents = name.replace('[', '').replace(']', '').split(', ')
-        names.append(name_contents[1] + ' ' + name_contents[0])
-    companies = [x.replace('/CIK/Search/', '').replace('+', ' ') for x in
-                 re.findall(r'/CIK/Search/(?:\w+\+)+', contents)]
-    tickers = [x.replace('/Ticker/', '') for x in re.findall(r'/Ticker/\w+', contents)]
-    prices = re.findall(r'\$\d+(?: - \$\d+)?', contents.replace(',', ''))
-    return dates, names, companies, tickers, prices
+    for senator in senators_json:
+        await build_embed(message, senator)
 
 
 def pretty_string(data):
@@ -59,9 +58,6 @@ TOKEN = os.getenv('DISCORD_BOT_TOKEN')
 
 client = discord.Client()
 
-date_list, name_list, company_list, ticker_list, price_list = obtain_data()
-senator_map = map_senators(date_list, name_list, company_list, ticker_list, price_list)
-
 
 @client.event
 async def on_ready():
@@ -72,15 +68,18 @@ async def on_ready():
 @client.event
 async def on_message(message):
     content = message.content
-    if re.search(r'^s!senators$', content):
-        await message.channel.send('\n'.join(set(name_list)))
-    elif re.search(r'^s!s.+$', content):
-        target = ' '.join([x.capitalize() for x in content[4:].lower().split(' ')])
-        print(target)
-        if target in senator_map:
-            await message.channel.send(target + ':\n```' + pretty_string(senator_map[target]) + '```')
-        else:
-            await message.channel.send('No senator found, please try again.')
+    if re.search(r'^s!today$', content):
+        try:
+            await obtain_data(message)
+        except:
+            await message.channel.send('No data for today as of right now')
+    elif re.search(r'^s!day \d{1,2}/\d{1,2}/\d{4}$', content):
+        try:
+            day_parts = content[6:].split('/')
+            day = f'{int(day_parts[0]):02d}_{int(day_parts[1]):02d}_{int(day_parts[2])}'
+            await obtain_data(message, day)
+        except:
+            await message.channel.send(f'No data for {content[6:]} as of right now')
 
 
 client.run(TOKEN)
